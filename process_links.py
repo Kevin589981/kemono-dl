@@ -79,6 +79,7 @@ def download_link(link: str, base_dir: str = "./download_base") -> List[str]:
         
         # 3. 记录下载后的文件列表（仅文件）
         after_files = get_files_only(get_current_items(base_dir))
+        print(after_files)
         new_files = list(after_files - before_files)
         
         # 4. 清理空目录（避免空文件夹被加入压缩包）
