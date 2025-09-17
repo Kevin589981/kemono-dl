@@ -169,6 +169,12 @@ def main():
     # 3. 逐个处理链接
     for idx, link in enumerate(links, 1):
         new_items = download_link(link)
+        item_set = set(new_items)
+    # 只保留那些其父目录不在待打包列表中的项目
+        new_items = [
+            item for item in new_items
+            if str(Path(item).parent) not in item_set
+        ]
         if new_items:
             batch_items.extend(new_items)
             total_downloaded += 1
