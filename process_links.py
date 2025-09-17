@@ -42,7 +42,7 @@ def download_link(link: str, base_dir: str = "./download_base") -> list[str]:
                 "kemono-dl",
                 link,
                 "--path", base_dir,  # 基础下载路径
-                "--output", "{post_id}/{post_title}",  # 简化输出模板（仅保留帖子ID和文件名）
+                "--output", "{post_title}/{filename}",  # 简化输出模板（仅保留帖子ID和文件名）
                 "--no-tmp"  # 不生成临时文件，直接写入最终文件（避免捕获临时文件）
             ],
             capture_output=True,
