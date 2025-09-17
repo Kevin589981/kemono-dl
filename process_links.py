@@ -1,98 +1,136 @@
 import os
 import subprocess
 import zipfile
-from glob import glob
 import shutil
+from pathlib import Path
 
-def read_links(filename):
-    """读取links.txt文件中的所有链接"""
-    with open(filename, 'r', encoding='utf-8') as f:
-        # 过滤空行和注释行
-        return [line.strip() for line in f if line.strip() and not line.startswith('#')]
+def read_links(link_file: str = "links.txt") -> list[str]:
+    """读取 links.txt 中的有效链接（过滤空行和注释行）"""
+    if not os.path.exists(link_file):
+        print(f"错误：{link_file} 文件不存在！")
+        return []
+    
+    with open(link_file, "r", encoding="utf-8") as f:
+        links = [
+            line.strip() 
+            for line in f 
+            if line.strip() and not line.startswith("#")  # 跳过注释和空行
+        ]
+    print(f"成功读取 {len(links)} 个有效链接")
+    return links
 
-def download_with_kemono_dl(url, output_dir):
-    """使用kemono-dl下载指定链接的内容"""
+def get_current_files(dir_path: str) -> set[str]:
+    """获取指定目录下所有文件/目录的绝对路径（用于对比下载前后差异）"""
+    return set(
+        str(path.resolve()) 
+        for path in Path(dir_path).rglob("*")  # 递归获取所有子项
+    )
+
+def download_link(link: str, base_dir: str = "./download_base") -> list[str]:
+    """
+    下载单个链接的内容，返回新增的文件/目录路径列表
+    使用 --path 指定基础路径，--output 简化目录结构
+    """
+    # 记录下载前的文件列表
+    before_download = get_current_files(base_dir)
+    
     try:
-        print(f"开始下载: {url}")
-        # 运行kemono-dl命令，指定输出目录
+        print(f"\n=== 开始下载链接：{link} ===")
+        # 核心命令：简化目录为「base_dir/帖子ID/文件名」
         result = subprocess.run(
-            ['kemono-dl', url, '-o', output_dir],
+            [
+                "kemono-dl",
+                link,
+                "--path", base_dir,  # 基础下载路径
+                "--output", "{post_id}/{filename}",  # 简化输出模板（仅保留帖子ID和文件名）
+                "--no-tmp"  # 不生成临时文件，直接写入最终文件（避免捕获临时文件）
+            ],
             capture_output=True,
             text=True,
-            check=True
+            check=True  # 下载失败时抛出异常
         )
-        print(f"成功下载: {url}")
-        return True
+        print(f"下载成功：{link}")
+        
+        # 对比下载前后的文件列表，获取新增内容
+        after_download = get_current_files(base_dir)
+        new_items = list(after_download - before_download)
+        print(f"该链接新增 {len(new_items)} 个文件/目录")
+        return new_items
+    
     except subprocess.CalledProcessError as e:
-        print(f"下载失败 {url}: {e.stderr}")
+        print(f"下载失败：{link}")
+        print(f"错误信息：{e.stderr}")
+        return []
+
+def create_bundle(items: list[str], bundle_num: int, output_dir: str = "./bundles") -> bool:
+    """
+    将指定的文件/目录打包为 ZIP 压缩包
+    items: 要打包的文件/目录路径列表
+    bundle_num: 压缩包编号（用于命名）
+    """
+    if not items:
+        print(f"警告：第 {bundle_num} 个压缩包无内容，跳过打包")
+        return False
+    
+    # 创建输出目录（若不存在）
+    os.makedirs(output_dir, exist_ok=True)
+    zip_path = os.path.join(output_dir, f"bundle-{bundle_num:03d}.zip")  # 命名格式：bundle-001.zip
+    
+    try:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zipf:
+            for item in items:
+                # 获取相对路径（以 download_base 为根目录，避免压缩包内包含完整系统路径）
+                rel_path = os.path.relpath(item, start="./download_base")
+                # 向压缩包添加文件/目录
+                if os.path.isfile(item):
+                    zipf.write(item, rel_path)
+                elif os.path.isdir(item):
+                    # 递归添加目录下所有内容
+                    for root, _, files in os.walk(item):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            file_rel_path = os.path.relpath(file_path, start="./download_base")
+                            zipf.write(file_path, file_rel_path)
+        
+        print(f"✅ 成功创建压缩包：{zip_path}（包含 {len(items)} 个项目）")
+        return True
+    
+    except Exception as e:
+        print(f"❌ 打包失败：{str(e)}")
         return False
 
-def create_zip(contents, zip_filename):
-    """将指定文件和目录压缩到ZIP文件"""
-    with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for item in contents:
-            if os.path.isfile(item):
-                # 添加文件，保留相对路径
-                zipf.write(item, os.path.relpath(item, 'downloads'))
-            elif os.path.isdir(item):
-                # 添加目录及其内容
-                for root, _, files in os.walk(item):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, 'downloads')
-                        zipf.write(file_path, arcname)
-
 def main():
-    # 读取所有链接
-    links = read_links('links.txt')
+    # 1. 读取链接
+    links = read_links()
     if not links:
-        print("没有找到有效的链接")
         return
-
-    # 下载计数器
-    download_count = 0
-    # 每批处理的链接数量
-    batch_size = 10
-    # 当前批次
-    current_batch = 1
-    # 当前批次下载的内容列表
-    batch_contents = []
-
-    # 确保下载目录存在
-    os.makedirs('downloads', exist_ok=True)
-    os.makedirs('bundles', exist_ok=True)
-
-    for link in links:
-        # 下载链接内容
-        success = download_with_kemono_dl(link, 'downloads')
-        if success:
-            download_count += 1
-            
-            # 获取刚刚下载的内容（假设最后修改的项目是新下载的）
-            # 这是一个简化的方法，可能需要根据实际情况调整
-            all_items = glob(os.path.join('downloads', '*'))
-            all_items.sort(key=os.path.getmtime, reverse=True)
-            
-            if all_items:
-                batch_contents.append(all_items[0])
-            
-            # 每达到batch_size个链接，打包一次
-            if download_count % batch_size == 0:
-                zip_name = f"bundles/bundle-{current_batch}.zip"
-                print(f"创建压缩包: {zip_name}")
-                create_zip(batch_contents, zip_name)
-                
+    
+    # 2. 初始化变量
+    batch_size = 10  # 每 10 个链接打包一次
+    current_batch = 1  # 当前批次编号
+    batch_items = []   # 当前批次的所有下载内容
+    total_downloaded = 0  # 总下载成功的链接数
+    
+    # 3. 逐个处理链接
+    for idx, link in enumerate(links, 1):
+        new_items = download_link(link)
+        if new_items:
+            batch_items.extend(new_items)
+            total_downloaded += 1
+        
+        # 4. 达到批次大小或处理完所有链接时，打包
+        if len(batch_items) >= batch_size or idx == len(links):
+            if batch_items:  # 仅当有内容时打包
+                create_bundle(batch_items, current_batch)
                 # 重置批次变量
+                batch_items = []
                 current_batch += 1
-                batch_contents = []
-
-    # 处理剩余的未打包内容
-    if batch_contents:
-        zip_name = f"bundles/bundle-{current_batch}.zip"
-        print(f"创建压缩包: {zip_name}")
-        create_zip(batch_contents, zip_name)
-
-    print(f"处理完成。共下载 {download_count} 个链接，生成 {current_batch} 个压缩包。")
+    
+    # 5. 输出最终统计
+    print(f"\n=== 处理完成 ===")
+    print(f"总链接数：{len(links)}")
+    print(f"成功下载数：{total_downloaded}")
+    print(f"生成压缩包数：{current_batch - 1}")
 
 if __name__ == "__main__":
     main()

@@ -3,43 +3,46 @@ name: Kemono Auto Download and Release
 on:
   push:
     paths:
-      - 'links.txt'  # 当links.txt文件被推送时触发
-  workflow_dispatch:  # 允许手动触发
+      - 'links.txt'  # 仅当 links.txt 推送时触发
+      - 'process_links.py'
+  workflow_dispatch:  # 支持手动触发
 
 permissions:
-  contents: write   # 允许创建Release
+  contents: write   # 允许创建/更新 Release
 
 jobs:
   process-and-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout 代码
+        uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: 设置 Python 环境
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.11'  # 匹配 kemono-dl 要求的 Python 版本
 
-      - name: Install kemono-dl
+      - name: 安装 kemono-dl
         run: |
-          python -m pip install -U pip
-          pip install .  # 安装当前仓库的kemono-dl工具
+          python -m pip install -U pip  # 升级 pip
+          pip install .  # 从当前仓库安装 kemono-dl
 
-      - name: Run downloader and packager
+      - name: 运行下载与打包脚本
         run: |
-          # 创建必要的目录
-          mkdir -p downloads bundles
-          python process_links.py
+          # 创建固定目录（避免权限问题）
+          mkdir -p ./download_base ./bundles
+          python process_links.py  # 执行核心脚本
 
-      - name: Create/Update Release
+      - name: 创建/更新 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: release-${{ github.run_number }}
+          tag_name: release-${{ github.run_number }}  # 自动递增版本号
           name: "Auto Release #${{ github.run_number }}"
           body: |
-            自动下载并打包的内容：
-            ▪ 来源文件：`links.txt`
-            ▪ 生成时间：${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
-          files: bundles/*.zip
+            ### 自动打包信息
+            - 来源链接文件：`links.txt`
+            - 生成时间：${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
+            - 压缩包规则：每 10 个链接的内容打包为 1 个 bundle
+          files: bundles/*.zip  # 上传所有压缩包
           draft: false
           prerelease: false
