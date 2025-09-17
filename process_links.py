@@ -62,6 +62,53 @@ def download_link(link: str, base_dir: str = "./download_base") -> list[str]:
         print(f"错误信息：{e.stderr}")
         return []
 
+# def create_bundle(items: list[str], bundle_num: int, output_dir: str = "./bundles") -> bool:
+#     """
+#     将指定的文件/目录打包为 ZIP 压缩包
+#     items: 要打包的文件/目录路径列表
+#     bundle_num: 压缩包编号（用于命名）
+#     """
+#     if not items:
+#         print(f"警告：第 {bundle_num} 个压缩包无内容，跳过打包")
+#         return False
+    
+#     # 创建输出目录（若不存在）
+#     os.makedirs(output_dir, exist_ok=True)
+#     zip_path = os.path.join(output_dir, f"bundle-{bundle_num:03d}.zip")  # 命名格式：bundle-001.zip
+    
+#     try:
+#         # with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zipf:
+#         #     for item in items:
+#         #         # 获取相对路径（以 download_base 为根目录，避免压缩包内包含完整系统路径）
+#         #         rel_path = os.path.relpath(item, start="./download_base")
+#         #         # 向压缩包添加文件/目录
+#         #         if os.path.isfile(item):
+#         #             zipf.write(item, rel_path)
+#         #         elif os.path.isdir(item):
+#         #             # 递归添加目录下所有内容
+#         #             for root, _, files in os.walk(item):
+#         #                 for file in files:
+#         #                     file_path = os.path.join(root, file)
+#         #                     file_rel_path = os.path.relpath(file_path, start="./download_base")
+#         #                     zipf.write(file_path, file_rel_path)
+#         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zipf:
+#             for item in items:
+#                 if os.path.isfile(item):
+#                     rel_path = os.path.relpath(item, start="./download_base")
+#                     zipf.write(item, rel_path)
+#                 elif os.path.isdir(item):
+#                     for root, _, files in os.walk(item):
+#                         for file in files:
+#                             file_path = os.path.join(root, file)
+#                             file_rel_path = os.path.relpath(file_path, start="./download_base")
+#                             zipf.write(file_path, file_rel_path)
+        
+#         print(f"✅ 成功创建压缩包：{zip_path}（包含 {len(items)} 个项目）")
+#         return True
+    
+#     except Exception as e:
+#         print(f"❌ 打包失败：{str(e)}")
+#         return False
 def create_bundle(items: list[str], bundle_num: int, output_dir: str = "./bundles") -> bool:
     """
     将指定的文件/目录打包为 ZIP 压缩包
@@ -72,27 +119,24 @@ def create_bundle(items: list[str], bundle_num: int, output_dir: str = "./bundle
         print(f"警告：第 {bundle_num} 个压缩包无内容，跳过打包")
         return False
     
-    # 创建输出目录（若不存在）
+    # --- 新增代码：过滤掉被包含在其他目录中的子项 ---
+    # 创建一个集合用于快速查找
+    item_set = set(items)
+    # 只保留那些其父目录不在待打包列表中的项目
+    top_level_items = [
+        item for item in items 
+        if str(Path(item).parent) not in item_set
+    ]
+    print(f"过滤后，顶层项目数：{len(top_level_items)}")
+    # ---------------------------------------------------
+
     os.makedirs(output_dir, exist_ok=True)
-    zip_path = os.path.join(output_dir, f"bundle-{bundle_num:03d}.zip")  # 命名格式：bundle-001.zip
+    zip_path = os.path.join(output_dir, f"bundle-{bundle_num:03d}.zip")
     
     try:
-        # with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zipf:
-        #     for item in items:
-        #         # 获取相对路径（以 download_base 为根目录，避免压缩包内包含完整系统路径）
-        #         rel_path = os.path.relpath(item, start="./download_base")
-        #         # 向压缩包添加文件/目录
-        #         if os.path.isfile(item):
-        #             zipf.write(item, rel_path)
-        #         elif os.path.isdir(item):
-        #             # 递归添加目录下所有内容
-        #             for root, _, files in os.walk(item):
-        #                 for file in files:
-        #                     file_path = os.path.join(root, file)
-        #                     file_rel_path = os.path.relpath(file_path, start="./download_base")
-        #                     zipf.write(file_path, file_rel_path)
+        # 使用过滤后的 top_level_items进行打包
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zipf:
-            for item in items:
+            for item in top_level_items: # <--- 注意：这里使用过滤后的列表
                 if os.path.isfile(item):
                     rel_path = os.path.relpath(item, start="./download_base")
                     zipf.write(item, rel_path)
@@ -103,7 +147,7 @@ def create_bundle(items: list[str], bundle_num: int, output_dir: str = "./bundle
                             file_rel_path = os.path.relpath(file_path, start="./download_base")
                             zipf.write(file_path, file_rel_path)
         
-        print(f"✅ 成功创建压缩包：{zip_path}（包含 {len(items)} 个项目）")
+        print(f"✅ 成功创建压缩包：{zip_path}（包含 {len(top_level_items)} 个顶层项目）")
         return True
     
     except Exception as e:
