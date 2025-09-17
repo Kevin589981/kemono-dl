@@ -68,7 +68,7 @@ def download_link(link: str, base_dir: str = "./download_base") -> List[str]:
                 "kemono-dl",
                 link,
                 "--path", base_dir,  # 基础路径
-                "--output", f"{post_id}/{filename}",  # 每个链接的文件独立存放在 post_id 目录
+                "--output", r"{post_id}/{filename}",  # 每个链接的文件独立存放在 post_id 目录
                 "--no-tmp",  # 不生成临时文件，避免捕获无效路径
                 "--skip-attachments",  # 可选：跳过附件（根据需求决定是否保留）
             ],
