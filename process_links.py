@@ -46,7 +46,8 @@ def download_link(link: str, skip_attachments: bool, base_dir: str = "./download
                 "--path", base_dir,
                 "--output", "{post_title}/{filename}",
                 "--no-tmp",
-                "--skip-attachments"  # 新增的参数
+                "--skip-extensions",  # 新增的参数
+                "zip,rar"
             ]
         else:
             print(f"\n=== 开始下载链接: {link} ===")
