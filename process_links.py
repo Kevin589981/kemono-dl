@@ -63,7 +63,8 @@ def download_link(link: str, skip_attachments: bool, base_dir: str = "./download
             command,
             capture_output=True,
             text=True,
-            check=True  # 下载失败时抛出异常
+            check=True,  # 下载失败时抛出异常
+            encoding='utf-8'
         )
         print(f"下载成功: {link}")
         
